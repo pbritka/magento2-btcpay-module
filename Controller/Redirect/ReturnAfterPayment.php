@@ -89,6 +89,7 @@ class ReturnAfterPayment extends Action
         $isInvoiceExpired = false;
 
         $resultRedirect = $this->resultRedirectFactory->create();
+        $resultRedirect->setUrl('/');
 
         $order = $this->orderFactory->create()->load($orderId);
         if ($order->getId()) {
@@ -110,7 +111,7 @@ class ReturnAfterPayment extends Action
         }
 
         if ($order && $valid) {
-            if ($isInvoiceProcessing) {
+            if ($isInvoiceProcessing || $invoice->isFullyPaid()) {
                 $this->checkoutSession->setLastQuoteId($order->getQuoteId());
                 $this->checkoutSession->setLastSuccessQuoteId($order->getQuoteId());
                 $this->checkoutSession->setLastOrderId($order->getId());

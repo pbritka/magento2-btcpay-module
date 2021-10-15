@@ -53,6 +53,7 @@ use RuntimeException;
 use Storefront\BTCPay\Model\BTCPay\Exception\ForbiddenException;
 use Storefront\BTCPay\Model\Invoice;
 use Storefront\BTCPay\Model\OrderStatuses;
+use Magento\Framework\Event\ManagerInterface as EventManagerInterface;
 
 class BTCPayService
 {
@@ -127,9 +128,29 @@ class BTCPayService
      */
     private $priceHelper;
 
+    /**
+     * @var EventManagerInterface
+     */
+    private $eventManager;
 
-    public function __construct(ResourceConnection $resource, ScopeConfigInterface $scopeConfig, OrderRepository $orderRepository, Transaction $transaction, LoggerInterface $logger, Url $urlBuider, StoreManagerInterface $storeManager, WriterInterface $configWriter, ValueFactory $configValueFactory, CollectionFactory $configCollectionFactory, RequestInterface $request, StoresConfig $storesConfig, ReinitableConfigInterface $reinitableConfig, Data $priceHelper)
-    {
+
+    public function __construct(
+        ResourceConnection $resource, 
+        ScopeConfigInterface $scopeConfig, 
+        OrderRepository $orderRepository, 
+        Transaction $transaction, 
+        LoggerInterface $logger, 
+        Url $urlBuider, 
+        StoreManagerInterface $storeManager, 
+        WriterInterface $configWriter, 
+        ValueFactory $configValueFactory, 
+        CollectionFactory $configCollectionFactory, 
+        RequestInterface $request, 
+        StoresConfig $storesConfig, 
+        ReinitableConfigInterface $reinitableConfig, 
+        Data $priceHelper,
+        EventManagerInterface $eventManager
+    ) {
         $this->scopeConfig = $scopeConfig;
         $this->db = $resource->getConnection();
         $this->orderRepository = $orderRepository;
@@ -144,6 +165,7 @@ class BTCPayService
         $this->storesConfig = $storesConfig;
         $this->reinitableConfig = $reinitableConfig;
         $this->priceHelper = $priceHelper;
+        $this->eventManager = $eventManager;
     }
 
     /**
@@ -313,7 +335,7 @@ class BTCPayService
      * @throws \JsonException
      */
     public function updateInvoice(string $btcPayStoreId, string $invoiceId, $logPayment = false): ?Order
-    {
+    {        
         $tableName = $this->db->getTableName('btcpay_invoices');
         $select = $this->db->select()->from($tableName)->where('invoice_id = ?', $invoiceId)->where('btcpay_store_id = ?', $btcPayStoreId)->limit(1);
 
@@ -332,8 +354,14 @@ class BTCPayService
             }
 
             $invoiceStatus = $invoice->getStatus();
+            $eventParams = [
+                'order' => $order,
+                'btc_invoice' => $invoice
+            ];
 
-            if ($logPayment) {
+            $this->eventManager->dispatch('btcpay_updateInvoice_before', $eventParams);
+
+            if ($logPayment) {                
                 $paymentInfo = $this->getPaymentInfo($magentoStoreId, $btcPayStoreId, $invoiceId, $invoice);
 
                 $comment = 'Incoming payment: <br> Total invoice amount in ' . $paymentInfo['invoice_amount']
@@ -367,22 +395,21 @@ class BTCPayService
                             $order->addCommentToStatusHistory('Payment underway: paid correctly. Not confirmed yet.', $paidCorrectlyStatus, true);
                         }
                         break;
-                    case BTCPayServerInvoice::STATUS_SETTLED:
+                    case BTCPayServerInvoice::STATUS_SETTLED:                        
                         // 2) Payments are settled (marked or not)
-                        $settledStatus = \Magento\Sales\Model\Order::STATE_COMPLETE;
+                        $settledStatus = \Magento\Sales\Model\Order::STATE_PROCESSING;
+                        $comment = 'Payment confirmed.';
+
+                        $marked = $invoice->isMarked();
+                        if ($marked) {
+                            $comment .= ' Marked manually.';
+                        }
+                        $order->addCommentToStatusHistory($comment, $settledStatus, true);
 
                         if ($invoice->isOverpaid()) {
                             $order->addCommentToStatusHistory('Payment confirmed: overpaid.');
                         } elseif ($order->canInvoice()) {
-
-                            // You can't be sure of the amount, when marked manually the additionalStatus is set to 'Marked' and has priority over 'Overpaid'
-                            $comment = 'Payment confirmed.';
-
-                            $marked = $invoice->isMarked();
-                            if ($marked) {
-                                $comment .= ' Marked manually.';
-                            }
-                            $order->addCommentToStatusHistory($comment, $settledStatus, true);
+                            // You can't be sure of the amount, when marked manually the additionalStatus is set to 'Marked' and has priority over 'Overpaid'                            
                             $invoice = $order->prepareInvoice();
                             $invoice->setRequestedCaptureCase(Order\Invoice::CAPTURE_OFFLINE);
                             $invoice->register();
@@ -441,6 +468,8 @@ class BTCPayService
                         $this->logger->error('Unknown invoice state "' . $invoiceStatus . '" for invoice "' . $invoiceId . '"');
                         break;
                 }
+
+                $this->eventManager->dispatch('btcpay_updateInvoice_after', $eventParams);
                 $order->save();
 
 //
@@ -598,7 +627,7 @@ class BTCPayService
             $config[$row->getPath()] = $row->getValue();
         }
 
-        return $config[$path];
+        return isset($config[$path]) ? $config[$path] : null;        
     }
 
     public function getInvoice(string $invoiceId, string $btcpayStoreId, int $magentoStoreId): \BTCPayServer\Result\Invoice
