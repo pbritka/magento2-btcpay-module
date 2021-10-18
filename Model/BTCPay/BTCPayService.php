@@ -356,10 +356,10 @@ class BTCPayService
             $invoiceStatus = $invoice->getStatus();
             $eventParams = [
                 'order' => $order,
-                'btc_invoice' => $invoice
+                'btcpay_invoice' => $invoice
             ];
 
-            $this->eventManager->dispatch('btcpay_updateInvoice_before', $eventParams);
+            $this->eventManager->dispatch('btcpay_update_invoice_before', $eventParams);
 
             if ($logPayment) {                
                 $paymentInfo = $this->getPaymentInfo($magentoStoreId, $btcPayStoreId, $invoiceId, $invoice);
@@ -396,8 +396,7 @@ class BTCPayService
                         }
                         break;
                     case BTCPayServerInvoice::STATUS_SETTLED:                        
-                        // 2) Payments are settled (marked or not)
-                        $settledStatus = \Magento\Sales\Model\Order::STATE_PROCESSING;
+                        // 2) Payments are settled (marked or not)                        
                         $comment = 'Payment confirmed.';
 
                         $marked = $invoice->isMarked();
@@ -469,7 +468,7 @@ class BTCPayService
                         break;
                 }
 
-                $this->eventManager->dispatch('btcpay_updateInvoice_after', $eventParams);
+                $this->eventManager->dispatch('btcpay_update_invoice_after', $eventParams);
                 $order->save();
 
 //
@@ -627,7 +626,7 @@ class BTCPayService
             $config[$row->getPath()] = $row->getValue();
         }
 
-        return isset($config[$path]) ? $config[$path] : null;        
+        return $config[$path] ?? null;        
     }
 
     public function getInvoice(string $invoiceId, string $btcpayStoreId, int $magentoStoreId): \BTCPayServer\Result\Invoice
