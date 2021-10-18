@@ -403,7 +403,7 @@ class BTCPayService
                         if ($marked) {
                             $comment .= ' Marked manually.';
                         }
-                        $order->addCommentToStatusHistory($comment, $settledStatus, true);
+                        $order->addCommentToStatusHistory($comment, false, true);
 
                         if ($invoice->isOverpaid()) {
                             $order->addCommentToStatusHistory('Payment confirmed: overpaid.');
