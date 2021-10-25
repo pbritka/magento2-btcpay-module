@@ -12,7 +12,7 @@
     "minimum-stability": "dev",
     "require": {
         "php": "^7.3",
-        "btcpayserver\/btcpayserver-greenfield-php": "^1.1",
+        "btcpayserver\/btcpayserver-greenfield-php": "dev-master",
         "ext-json": "*",
         "ext-bcmath": "*"
     },
