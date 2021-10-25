@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Controller\Redirect;
@@ -98,7 +103,7 @@ class ForwardToPayment extends Action
                 $savedInvoiceInDb = $this->btcPayService->saveInvoiceInDb($btcpayInvoice);
 
                 $pendingPaymentStatus = OrderStatuses::STATUS_CODE_PENDING_PAYMENT;
-                $order->addCommentToStatusHistory('Pending BTC payment', $pendingPaymentStatus);
+                $order->addCommentToStatusHistory('Pending BTCPay  payment', $pendingPaymentStatus);
                 $order->save();
 
                 if (!$this->customerSession->isLoggedIn()) {

@@ -1,11 +1,80 @@
 <?xml version="1.0"?>
+<!--
+  @author Wouter Samaey <wouter.samaey@storefront.agency>
+  @license MIT
+  -->
+
 <config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:noNamespaceSchemaLocation="../../../Config/etc/system_file.xsd">
     <system>
+
+        <!--
+        <section id="payment_us" extends="payment" showInDefault="0" showInWebsite="0" showInStore="0">
+            <group id="paypal_alternative_payment_methods" sortOrder="5" showInDefault="0" showInWebsite="0" showInStore="0">
+                <group id="express_checkout_us" translate="label comment" extends="payment_all_paypal/express_checkout" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>>BTCPay Express Checkout</label>
+                    <fieldset_css>complex paypal-express-section</fieldset_css>
+                    <frontend_model>Magento\Paypal\Block\Adminhtml\System\Config\Fieldset\Payment</frontend_model>
+                    <comment>Add another payment method to your existing solution or as a stand-alone option.</comment>
+                    <help_url>https://merchant.paypal.com/cgi-bin/marketingweb?cmd=_render-content</help_url>
+                    <attribute type="shared">0</attribute>
+                    <attribute type="activity_path">payment/paypal_express/active</attribute>
+                    <attribute type="activity_path">payment/payflow_express/active</attribute>
+                    <attribute type="displayIn">recommended_solutions</attribute>
+                </group>
+            </group>
+        </section>
+-->
+
+
+
+
+
+
+
+
         <section id="payment">
-            <group id="btcpay" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="1"
+
+            <!-- BEGIN: Fix PayPal's bad UX -->
+            <group id="account">
+                <!-- Remove title by replacing it with a space -->
+                <label> </label>
+
+                <field id="merchant_country">
+                    <label>Lookup PayPal Options</label>
+                    <comment> </comment> <!-- Remove comment by replacing it with a space -->
+                </field>
+            </group>
+            <group id="recommended_solutions">
+                <label>PayPal for your country:</label>
+            </group>
+            <!-- END: Fix PayPal's bad UX -->
+
+            <!--
+            <group id="other_payment_methods">
+                <label>Fiat Payment Methods:</label>
+            </group>
+            -->
+
+            <!--
+            <group id="recommended_solutions2" translate="label" sortOrder="1" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Recommended Solutions:</label>
+                <fieldset_css>paypal-top-section paypal-recommended-header</fieldset_css>
+                <frontend_model>Magento\Config\Block\System\Config\Form\Fieldset</frontend_model>
+            </group>
+            -->
+
+<!--
+            <group id="btcpay_group" translate="label" type="text" sortOrder="100" showInDefault="1" showInWebsite="1"
                    showInStore="1">
-                <label>BTC Pay Server</label>
+-->
+                <group id="btcpay" translate="label comment" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <fieldset_css>complex btcpay-section</fieldset_css>
+                    <frontend_model>Storefront\BTCPay\Block\Adminhtml\System\Config\Fieldset\Payment</frontend_model>
+                    <attribute type="shared">0</attribute>
+                    <attribute type="displayIn">recommended_solutions2</attribute>
+
+                <label>BTCPay Server</label>
 
                 <field id="active" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1"
                        showInStore="0">
@@ -13,18 +82,10 @@
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                 </field>
 
-                <field id="auto_cancel" translate="label" type="select" sortOrder="15" showInDefault="1" showInWebsite="1"
-                       showInStore="0">
-                    <label>Auto-cancel on Expiry</label>
-                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                    <comment>Enabling this means the order will be canceled on expiry. This is undoable.</comment>
-                </field>
-
                 <field id="title" translate="label" type="text" sortOrder="20" showInDefault="1" showInWebsite="1"
                        showInStore="1">
                     <label>Title</label>
                 </field>
-
 
                 <field id="btcpay_base_url" translate="label" type="text" sortOrder="50" showInDefault="1"
                        showInWebsite="0" showInStore="0">
@@ -68,25 +129,34 @@
                 TODO Add support for flattened payment methods in checkout (multiple radio buttons instead of just 1)
                 -->
 
-                <field id="sort_order" translate="label" type="text" sortOrder="140" showInDefault="1" showInWebsite="1"
+                <field id="auto_cancel" translate="label" type="select" sortOrder="90" showInDefault="1" showInWebsite="1"
+                       showInStore="0">
+                    <label>Auto-cancel on Expiry</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment>Enable to have the order canceled on invoice expiry in BTCPay Server. When an order is canceled, the reserved product quantities are returned to stock, but a canceled order cannot be uncancelled, so if unsure, don't do this.</comment>
+                </field>
+
+                <field id="sort_order" translate="label" type="text" sortOrder="500" showInDefault="1" showInWebsite="1"
                        showInStore="0">
                     <label>Sort Order</label>
                     <frontend_class>validate-number</frontend_class>
                 </field>
 
-                <field id="allowspecific" translate="label" type="allowspecific" sortOrder="150" showInDefault="1"
+                <field id="allowspecific" translate="label" type="allowspecific" sortOrder="510" showInDefault="1"
                        showInWebsite="1" canRestore="1">
                     <label>Payment from Applicable Countries</label>
                     <source_model>Magento\Payment\Model\Config\Source\Allspecificcountries</source_model>
                 </field>
 
-                <field id="specificcountry" translate="label" type="multiselect" sortOrder="160" showInDefault="1"
+                <field id="specificcountry" translate="label" type="multiselect" sortOrder="520" showInDefault="1"
                        showInWebsite="1">
                     <label>Payment from Specific Countries</label>
                     <source_model>Magento\Directory\Model\Config\Source\Country</source_model>
                     <can_be_empty>1</can_be_empty>
                 </field>
-
+                    <!--
+                </group>
+                -->
             </group>
 
         </section>

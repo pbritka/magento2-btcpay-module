@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 /**
  * Integrates BTCPay Server with Magento 2 for online payments
@@ -20,6 +25,7 @@ declare(strict_types=1);
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
+
 namespace Storefront\BTCPay\Model;
 
 use Magento\Directory\Helper\Data as DirectoryHelper;
@@ -28,7 +34,8 @@ use Magento\Payment\Model\Method\AbstractMethod;
 /**
  * Pay In Store payment method model
  */
-class BTCPay extends AbstractMethod {
+class BTCPay extends AbstractMethod
+{
 
 
     const PAYMENT_METHOD_CODE = 'btcpay';
@@ -69,24 +76,30 @@ class BTCPay extends AbstractMethod {
      */
     private $btcPayHelper;
 
-    public function __construct(\Storefront\BTCPay\Helper\Data $btcPayHelper, \Magento\Framework\Model\Context $context, \Magento\Framework\Registry $registry, \Magento\Framework\Api\ExtensionAttributesFactory $extensionFactory, \Magento\Framework\Api\AttributeValueFactory $customAttributeFactory, \Magento\Payment\Helper\Data $paymentData, \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig, \Magento\Framework\UrlInterface $url, \Magento\Payment\Model\Method\Logger $logger, \Magento\Framework\Model\ResourceModel\AbstractResource $resource = null, \Magento\Framework\Data\Collection\AbstractDb $resourceCollection = null, array $data = [], DirectoryHelper $directory = null) {
+    public function __construct(\Storefront\BTCPay\Helper\Data $btcPayHelper, \Magento\Framework\Model\Context $context, \Magento\Framework\Registry $registry, \Magento\Framework\Api\ExtensionAttributesFactory $extensionFactory, \Magento\Framework\Api\AttributeValueFactory $customAttributeFactory, \Magento\Payment\Helper\Data $paymentData, \Magento\Framework\App\Config\ScopeConfigInterface $scopeConfig, \Magento\Framework\UrlInterface $url, \Magento\Payment\Model\Method\Logger $logger, \Magento\Framework\Model\ResourceModel\AbstractResource $resource = null, \Magento\Framework\Data\Collection\AbstractDb $resourceCollection = null, array $data = [], DirectoryHelper $directory = null)
+    {
         parent::__construct($context, $registry, $extensionFactory, $customAttributeFactory, $paymentData, $scopeConfig, $logger, $resource, $resourceCollection, $data, $directory);
         $this->url = $url;
         $this->btcPayHelper = $btcPayHelper;
     }
 
-    public function isAvailable(\Magento\Quote\Api\Data\CartInterface $quote = null) {
+    public function isAvailable(\Magento\Quote\Api\Data\CartInterface $quote = null)
+    {
         $r = parent::isAvailable($quote);
 
-        $errors = $this->btcPayHelper->getInstallationErrors((int) $quote->getStoreId(), true);
-        if(count($errors) > 0){
+        $globalErrors = $this->btcPayHelper->getGlobalInstallationErrors(true);
+        $storeErrors = $this->btcPayHelper->getStoreInstallationErrors((int)$quote->getStoreId(), true);
+
+        $isFree =  null !== $quote && $quote->getGrandTotal() == 0;
+        if ($isFree || count($storeErrors) > 0 || count($globalErrors) > 0) {
             $r = false;
         }
 
         return $r;
     }
 
-    public function getOrderPlaceRedirectUrl(){
+    public function getOrderPlaceRedirectUrl()
+    {
         $r = $this->url->getUrl('btcpay/redirect/forwardtopayment', [
             '_secure' => true,
             '_nosid' => true
@@ -94,7 +107,8 @@ class BTCPay extends AbstractMethod {
         return $r;
     }
 
-    public function getConfigData($field, $storeId = null) {
+    public function getConfigData($field, $storeId = null)
+    {
         if ($field === 'order_place_redirect_url') {
             return $this->getOrderPlaceRedirectUrl();
         } else {
@@ -111,7 +125,8 @@ class BTCPay extends AbstractMethod {
      *
      * @return \Storefront\PayIngenico\Model\Payment\PaymentAbstract
      */
-    public function initialize($paymentAction, $stateObject) {
+    public function initialize($paymentAction, $stateObject)
+    {
         $stateObject->setState(\Magento\Sales\Model\Order::STATE_NEW)->setStatus(\Magento\Sales\Model\Order::STATE_PENDING_PAYMENT);
 
         $message = __('Customer is forwarded to BTCPay Server to pay. Awaiting feedback.');

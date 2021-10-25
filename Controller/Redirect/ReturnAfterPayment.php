@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Controller\Redirect;
@@ -100,7 +105,7 @@ class ReturnAfterPayment extends Action
                 $magentoStoreId = (int)$order->getStoreId();
                 $btcPayStoreId = $this->btcPayService->getBtcPayStore($magentoStoreId);
 
-                $invoice = $this->btcPayService->getInvoice($btcPayInvoiceId, $btcPayStoreId, $magentoStoreId);
+                $invoice = $this->btcPayService->getInvoice($btcPayInvoiceId, $btcPayStoreId);
                 $isInvoiceExpired = $invoice->isExpired();
                 $isInvoiceProcessing = $invoice->isProcessing();
             }

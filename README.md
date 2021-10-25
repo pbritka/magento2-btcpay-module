@@ -2,10 +2,10 @@
 
 ## Requirements
 - Magento 2.4.2 or later installation (tested on Community Edition 2.4.2)
-- Magento < 2.4 should also work, but is untested. 
-- PHP 7.2 or greater. Tested with PHP 7.4.
-- Your BTCPay Server must be setup with HTTPS or HTTP using TOR for security.
-- You need an API key for your user in BTCPay Server (new since module v2.0)
+  - Magento < 2.4 should also work, but is untested. 
+- PHP 7.3 or greater. Tested with PHP 7.4.
+- BTCPay Server version 1.2.5 or greater
+- BTCPay Server must be setup with HTTPS (for security), or you can use HTTP with TOR (.onion address).
 
 ## Features
 - Allows you to pay with BTCPay Server in Magento 2 stores
@@ -21,7 +21,6 @@ The goal of this module is to allow Bitcoin payments in Magento 2 without any ot
 This module is also designed to be robust, low-maintenance and a solid foundation for future customization, should your business need it.
 
 ## How to install
-
 The installation process is just like any other Magento 2 module that you'd install using composer. For your reference, these are the typical steps:
 
 - Add the `Storefront_BTCPay` module using composer by running:
@@ -39,8 +38,12 @@ php bin/magento setup:upgrade
 
 ## How to configure
 After installation, a new Payment Method will be visible in Stores > Configuration > Sales > Payment Methods. Configure the fields there.
-
-You will need to enter your BTCPay Server API key.
+1. Enter the URL of your BTCPay Server installation.
+2. Save the config.
+3. Click the "Connect to BTCPay" button.
+4. Switch the config scope to the store view you want to configure. If you have multiple store views, repeat this for every store view:
+   - Select the BTCPay Store to use for the selected Store View
+   - Save
 
 ## How does it work?
 - When an order is placed in Magento and BTCPay Server was selected as a payment method, the customer is redirected to the payment page on your BTCPay Server.

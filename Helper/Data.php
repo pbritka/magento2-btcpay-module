@@ -1,14 +1,20 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Helper;
 
+use Magento\Framework\App\CacheInterface;
 use Magento\Framework\App\Config;
 use Magento\Framework\App\Config\ScopeConfigInterface;
-use Magento\Store\Api\StoreRepositoryInterface;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use Psr\Log\LoggerInterface;
+use Storefront\BTCPay\Model\BTCPay\BTCPayService;
 use Storefront\BTCPay\Model\BTCPay\Exception\CannotCreateWebhook;
 use Storefront\BTCPay\Model\BTCPay\Exception\ForbiddenException;
 
@@ -23,8 +29,12 @@ class Data
         'btcpay.store.canmodifystoresettings'
     ];
 
+    const REQUIRED_BTCPAY_SERVER_VERSION = '1.2.5';
+
+    const CONFIG_ROOT = 'payment/btcpay/';
+
     /**
-     * @var \Storefront\BTCPay\Model\BTCPay\BTCPayService
+     * @var BTCPayService
      */
     private $btcPayService;
 
@@ -34,7 +44,7 @@ class Data
     private $logger;
 
     /**
-     * @var \Magento\Framework\App\CacheInterface
+     * @var CacheInterface
      */
     private $cache;
     /**
@@ -42,32 +52,60 @@ class Data
      */
     private $scopeConfig;
 
-    /**
-     * @var StoreRepositoryInterface $storeRepository
-     */
-    private $storeRepository;
 
     /**
      * @var StoreManagerInterface $storeManager
      */
     private $storeManager;
 
-    public function __construct(\Storefront\BTCPay\Model\BTCPay\BTCPayService $BTCPayService, ScopeConfigInterface $scopeConfig, \Magento\Framework\App\CacheInterface $cache, LoggerInterface $logger, StoreRepositoryInterface $storeRepository, StoreManagerInterface $storeManager)
+    public function __construct(BTCPayService $BTCPayService, ScopeConfigInterface $scopeConfig, CacheInterface $cache, LoggerInterface $logger, StoreManagerInterface $storeManager)
     {
         $this->btcPayService = $BTCPayService;
         $this->logger = $logger;
         $this->cache = $cache;
         $this->scopeConfig = $scopeConfig;
-        $this->storeRepository = $storeRepository;
         $this->storeManager = $storeManager;
     }
 
     public function getWebhookSecret(): ?string
     {
-        return $this->scopeConfig->getValue('payment/btcpay/webhook_secret', ScopeInterface::SCOPE_STORE, 0);
+        return $this->scopeConfig->getValue(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'webhook_secret', ScopeInterface::SCOPE_STORE, 0);
     }
 
-    public function getInstallationErrors(int $magentoStoreId, bool $useCache): array
+    public function getGlobalInstallationErrors(bool $useCache): array
+    {
+        $cacheKey = 'BTCPAY_INSTALLATION_ERRORS';
+        $errors = false;
+        if ($useCache) {
+            $errors = $this->cache->load($cacheKey);
+            if ($errors !== false) {
+                $errors = \json_decode($errors, true);
+            }
+        }
+        if ($errors === false) {
+
+            $errors = [];
+            $isBaseUrlSet = $this->isBtcPayBaseUrlSet();
+
+            if ($isBaseUrlSet) {
+
+                try {
+                    $version = $this->btcPayService->getVersion();
+                    if ($version === null || version_compare($version, self::REQUIRED_BTCPAY_SERVER_VERSION) < 0) {
+                        $errors[] = __('Your BTCPay Server version is %1, but we need at least %2.', $version, self::REQUIRED_BTCPAY_SERVER_VERSION);
+                    }
+                } catch (\BTCPayServer\Exception\ForbiddenException $ex) {
+                    // Do nothing. There us an API key permission issue and we have other warnings for checking that.
+                }
+
+            } else {
+                $errors[] = __('The BTCPay Base URL was not set yet.');
+            }
+        }
+        return $errors;
+    }
+
+    public function getStoreInstallationErrors(int $magentoStoreId, bool $useCache): array
     {
         $cacheKey = 'BTCPAY_INSTALLATION_ERRORS_STORE_' . $magentoStoreId;
         $errors = false;
@@ -79,7 +117,7 @@ class Data
         }
 
         if ($errors === false) {
-            $secret = $this->btcPayService->getWebhookSecret($magentoStoreId);
+            $this->btcPayService->getWebhookSecret();
 
             $errors = [];
 
@@ -122,8 +160,6 @@ class Data
 
                 if ($myPermissions === $neededPermissions) {
                     // Permissions are exact
-
-
                     $this->btcPayService->removeDeletedBtcPayStores();
 
                     $btcPayStoreId = $this->btcPayService->getBtcPayStore($magentoStoreId);
@@ -152,7 +188,7 @@ class Data
                             $errors[] = __('Could not install the webhook in BTCPay Server for this Magento installation.');
                         }
                     } else {
-                        $errors[] = __('Please select a BTCPay Server Store to use.');
+                        $errors[] = __('Go to the Store View scope and select the BTCPay Store to use.');
                     }
                 } else {
                     // You either have too many permissions or too few!
@@ -184,7 +220,6 @@ class Data
 
     public function installWebhookIfNeeded(int $magentoStoreId, bool $autoCreateIfNeeded): bool
     {
-
         try {
             $apiKey = $this->btcPayService->getApiKey('default', 0);
             if ($apiKey) {
@@ -192,7 +227,6 @@ class Data
                 if ($btcPayStoreId) {
 
                     $webhookData = $this->btcPayService->getWebhooksForStore($magentoStoreId, $btcPayStoreId, $apiKey);
-
 
                     if (!$webhookData) {
                         if ($autoCreateIfNeeded) {
@@ -244,7 +278,6 @@ class Data
             // Bad configuration
             return false;
         }
-
     }
 
     public function getApiKeyInfo($scope, $scopeId)
@@ -313,35 +346,32 @@ class Data
         return $this->btcPayService->getAllBtcPayStoresAssociative($baseUrl, $apiKey);
     }
 
-    public function getSelectedBtcPayStoreForMagentoStore(int $magentoStoreId)
+    public function getSelectedBtcPayStoreForMagentoStore(int $magentoStoreId): ?string
     {
         return $this->btcPayService->getBtcPayStore($magentoStoreId);
     }
 
-    public function deleteWebhookIfNeeded(int $storeId, string $apiKey, string $btcPayStoreId)
+    public function deleteWebhookIfNeeded(int $storeId, string $apiKey, string $btcPayStoreId): bool
     {
         $webhook = $this->btcPayService->getWebhooksForStore($storeId, $btcPayStoreId, $apiKey);
         if ($webhook) {
             $webhookId = $webhook['id'];
-            $deleted = $this->btcPayService->deleteWebhook($storeId, $btcPayStoreId, $webhookId, $apiKey);
+            try {
+                $this->btcPayService->deleteWebhook($btcPayStoreId, $webhookId, $apiKey);
+                return true;
+            } catch (\BTCPayServer\Exception\BTCPayException $e) {
+                return false;
+            }
         }
         return true;
     }
 
-    public function deleteWebhooksIfNeeded($storeIds, $apiKey, $btcPayStoreId)
-    {
-        foreach ($storeIds as $storeId) {
-            $this->deleteWebhookIfNeeded((int)$storeId, $apiKey, $btcPayStoreId);
-        }
-        return true;
-    }
-
-    public function getCurrentStoreId()
+    public function getCurrentStoreId(): ?int
     {
         return $this->btcPayService->getCurrentMagentoStoreId();
     }
 
-    public function getApiKey($scope, $scopeId)
+    public function getApiKey(string $scope, int $scopeId): ?string
     {
         return $this->btcPayService->getApiKey($scope, $scopeId);
     }

@@ -1,3 +1,8 @@
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 define(
     [
         'uiComponent',

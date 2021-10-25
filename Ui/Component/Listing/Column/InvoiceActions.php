@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 /**
  * Integrates BTCPay Server with Magento 2 for online payments
@@ -67,8 +72,8 @@ class InvoiceActions extends \Magento\Ui\Component\Listing\Columns\Column {
                 if (isset($item['invoice_id'])) {
 
 
-                    // TODO add view URL + add multi store support
-                    $viewUrl = $this->btcPayService->getInvoiceDetailUrl(0, $item['invoice_id']);
+                    // TODO add view URL
+                    $viewUrl = $this->btcPayService->getInvoiceDetailUrl($item['invoice_id']);
 
                     $item[$this->getData('name')] = [
                         'update' => [

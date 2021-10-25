@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Observer;
@@ -6,7 +11,6 @@ namespace Storefront\BTCPay\Observer;
 use Magento\Framework\Event\Observer;
 use Magento\Framework\Event\ObserverInterface;
 use Storefront\BTCPay\Helper\Data;
-use \Magento\Store\Model\StoresConfig;
 
 
 class CheckWebhooks implements ObserverInterface
@@ -17,15 +21,9 @@ class CheckWebhooks implements ObserverInterface
      */
     private $helper;
 
-    /**
-     * @var StoresConfig $storesConfig
-     */
-    private $storesConfig;
-
-    public function __construct(Data $helper, StoresConfig $storesConfig)
+    public function __construct(Data $helper)
     {
         $this->helper = $helper;
-        $this->storesConfig = $storesConfig;
     }
 
     /**
@@ -37,7 +35,7 @@ class CheckWebhooks implements ObserverInterface
         $changedPaths = $observer->getEvent()->getData('changed_paths');
 
         foreach ($changedPaths as $changedPath) {
-            if ($changedPath === "payment/btcpay/btcpay_store_id") {
+            if ($changedPath === \Storefront\BTCPay\Helper\Data::CONFIG_ROOT . 'btcpay_store_id') {
 
                 $storeId = $this->helper->getCurrentStoreId();
                 $webhook = $this->helper->installWebhookIfNeeded($storeId, true);
@@ -56,11 +54,17 @@ class CheckWebhooks implements ObserverInterface
                 }
 
                 foreach ($allBtcPayStores as $btcPayStoreNotLinkedToMagentoStore) {
-                    $storeId = $this->helper->getCurrentStoreId();
                     $apiKey = $this->helper->getApiKey('default', 0);
                     $btcPayStoreId = $btcPayStoreNotLinkedToMagentoStore['id'];
                     $magentoStoreViewIds = $this->helper->getAllMagentoStoreViewIds();
-                    $deleted = $this->helper->deleteWebhooksIfNeeded($magentoStoreViewIds, $apiKey, $btcPayStoreId);
+                    foreach ($magentoStoreViewIds as $storeId) {
+                        try {
+                            $this->helper->deleteWebhookIfNeeded($storeId, $apiKey, $btcPayStoreId);
+                        } catch (\BTCPayServer\Exception\BTCPayException $e) {
+                            // Do nothing
+                        }
+                    }
+
                 }
             }
         }

@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Setup;
@@ -59,7 +64,7 @@ class UpgradeSchema implements UpgradeSchemaInterface
             $setup->getConnection()->addColumn('btcpay_invoices', 'btcpay_store_id', [
                 'type' => Table::TYPE_TEXT,
                 'default' => false,
-                'comment' => 'BTC Pay Server Store ID',
+                'comment' => 'BTCPay Server Store ID',
                 'after' => 'id'
             ]);
 

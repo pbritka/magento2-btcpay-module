@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 /**
  * Integrates BTCPay Server with Magento 2 for online payments
@@ -51,7 +56,7 @@ class BtcPayInvoice extends \Magento\Ui\Component\Listing\Columns\Column {
                 if (isset($item[$fieldName])) {
                     $invoiceId = $item[$fieldName];
                     $magentoStoreId = $item['magento_store_id'];
-                    $url = $this->btcPayService->getInvoiceDetailUrl((int)$magentoStoreId, $invoiceId);
+                    $url = $this->btcPayService->getInvoiceDetailUrl($invoiceId);
                     $html = '<a href="' . $url . '" target="_blank">';
                     $html .= $invoiceId;
                     $html .= '</a>';

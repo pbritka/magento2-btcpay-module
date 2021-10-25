@@ -1,17 +1,20 @@
 <?xml version="1.0"?>
-<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../Store/etc/config.xsd">
+<!--
+  @author Wouter Samaey <wouter.samaey@storefront.agency>
+  @license MIT
+  -->
+
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="../../Store/etc/config.xsd">
     <default>
         <payment>
-            <btcpay>
-                <active>1</active>
-                <title>Pay with Bitcoin</title>
-                <http_scheme>https</http_scheme>
-                <payment_confirmed_status></payment_confirmed_status>
-                <payment_complete_status></payment_complete_status>
-                <payment_action>true</payment_action>
-                <model>Storefront\BTCPay\Model\BTCPay</model>
-                <group>offline</group>
-            </btcpay>
+            <btcpay_group>
+                <btcpay>
+                    <active>1</active>
+                    <title>Pay with Bitcoin</title>
+                    <model>Storefront\BTCPay\Model\BTCPay</model>
+                </btcpay>
+            </btcpay_group>
         </payment>
     </default>
 </config>

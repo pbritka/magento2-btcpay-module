@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Block\Adminhtml\Form\Field;
@@ -51,21 +56,19 @@ class ApiKey extends \Magento\Config\Block\System\Config\Form\Field
 
     }
 
-    private function getApiKeyInfo()
+    private function getApiKeyInfo(): string
     {
         $isBaseUrlSet = $this->helper->isBtcPayBaseUrlSet();
-
         if (!$isBaseUrlSet) {
-            return __('Save the BTCPay Base Url first.');
+            return '';
         }
-
         $html = '<div style="display: flex; justify-content: space-between; align-items:center">';
 
         $apiKeyInfo = $this->helper->getApiKeyInfo('default', 0);
 
         $html = $html . '
     <div style="font-weight: normal">' . $apiKeyInfo['api_key'] . '</div>
-    <div><a class="action-default" target="_blank" href="' . $apiKeyInfo['generate_url'] . '\">' . __('Generate API Key') . '</a></div>';
+    <div><a class="action-default" target="_blank" href="' . $apiKeyInfo['generate_url'] . '\">' . __('Connect to BTCPay Server') . '</a></div>';
 
         return $html;
     }

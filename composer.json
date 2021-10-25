@@ -3,7 +3,6 @@
     "description": "",
     "type": "magento2-module",
     "license": "mit",
-    "version": "2.0.0",
     "authors": [
         {
             "email": "wouter.samaey@storefront.be",
@@ -13,7 +12,9 @@
     "minimum-stability": "dev",
     "require": {
         "php": "^7.3",
-        "btcpayserver\/btcpayserver-greenfield-php": "dev-master"
+        "btcpayserver\/btcpayserver-greenfield-php": "^1.1",
+        "ext-json": "*",
+        "ext-bcmath": "*"
     },
     "autoload": {
         "files": [

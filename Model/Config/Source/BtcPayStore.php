@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 /**
  * Integrates BTCPay Server with Magento 2 for online payments
@@ -23,6 +28,8 @@ declare(strict_types=1);
 
 namespace Storefront\BTCPay\Model\Config\Source;
 
+use BTCPayServer\Exception\BTCPayException;
+
 class BtcPayStore implements \Magento\Framework\Data\OptionSourceInterface
 {
 
@@ -40,16 +47,30 @@ class BtcPayStore implements \Magento\Framework\Data\OptionSourceInterface
     {
         $r = [];
 
-        $magentoStoreId = $this->btcPayService->getCurrentMagentoStoreId();
-
         $baseUrl = $this->btcPayService->getBtcPayServerBaseUrl();
         $apiKey = $this->btcPayService->getApiKey('default', 0);
-        $stores = $this->btcPayService->getAllBtcPayStores($baseUrl, $apiKey);
+
+        $misconfigured = false;
+        $stores = [];
+        if($baseUrl && $apiKey) {
+            try {
+                $stores = $this->btcPayService->getAllBtcPayStores($baseUrl, $apiKey);
+            }catch (BTCPayException $e){
+                // Do nothing
+                $misconfigured = true;
+            }
+        }else{
+            $misconfigured = true;
+        }
 
         $r[] = '';
-        if ($stores) {
-            foreach ($stores as $store) {
-                $r[$store['id']] = $store['name'];
+        if($misconfigured){
+            $r[''] = '-- '.__('Please connect BTCPay Server first').' --';
+        }else {
+            if ($stores) {
+                foreach ($stores as $store) {
+                    $r[$store['id']] = $store['name'];
+                }
             }
         }
 

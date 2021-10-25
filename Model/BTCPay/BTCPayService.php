@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 /**
  * Integrates BTCPay Server with Magento 2 for online payments
@@ -24,6 +29,7 @@ declare(strict_types=1);
 namespace Storefront\BTCPay\Model\BTCPay;
 
 use BTCPayServer\Client\InvoiceCheckoutOptions;
+use BTCPayServer\Client\Server;
 use BTCPayServer\Result\Invoice as BTCPayServerInvoice;
 use BTCPayServer\Util\PreciseNumber;
 use GuzzleHttp\Client;
@@ -37,6 +43,7 @@ use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Transaction;
+use Magento\Framework\Event\ManagerInterface as EventManagerInterface;
 use Magento\Framework\Exception\InputException;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
@@ -53,12 +60,9 @@ use RuntimeException;
 use Storefront\BTCPay\Model\BTCPay\Exception\ForbiddenException;
 use Storefront\BTCPay\Model\Invoice;
 use Storefront\BTCPay\Model\OrderStatuses;
-use Magento\Framework\Event\ManagerInterface as EventManagerInterface;
 
 class BTCPayService
 {
-    const CONFIG_API_KEY = 'payment/btcpay/api_key';
-
     /**
      * @var ScopeConfigInterface
      */
@@ -84,16 +88,6 @@ class BTCPayService
     private $logger;
 
     /**
-     * @var Url $urlBuilder
-     */
-    private $urlBuilder;
-
-    /**
-     * @var StoreManagerInterface $storeManager
-     */
-    private $storeManager;
-
-    /**
      * @var WriterInterface $configWriter
      */
     private $configWriter;
@@ -102,11 +96,6 @@ class BTCPayService
      * @var ValueFactory
      */
     private $configValueFactory;
-
-    /**
-     * @var CollectionFactory $configCollectionFactory
-     */
-    private $configCollectionFactory;
 
     /**
      * @var RequestInterface $request
@@ -135,22 +124,23 @@ class BTCPayService
 
 
     public function __construct(
-        ResourceConnection $resource, 
-        ScopeConfigInterface $scopeConfig, 
-        OrderRepository $orderRepository, 
-        Transaction $transaction, 
-        LoggerInterface $logger, 
-        Url $urlBuider, 
-        StoreManagerInterface $storeManager, 
-        WriterInterface $configWriter, 
-        ValueFactory $configValueFactory, 
-        CollectionFactory $configCollectionFactory, 
-        RequestInterface $request, 
-        StoresConfig $storesConfig, 
-        ReinitableConfigInterface $reinitableConfig, 
-        Data $priceHelper,
-        EventManagerInterface $eventManager
-    ) {
+        ResourceConnection        $resource,
+        ScopeConfigInterface      $scopeConfig,
+        OrderRepository           $orderRepository,
+        Transaction               $transaction,
+        LoggerInterface           $logger,
+        Url                       $urlBuider,
+        StoreManagerInterface     $storeManager,
+        WriterInterface           $configWriter,
+        ValueFactory              $configValueFactory,
+        CollectionFactory         $configCollectionFactory,
+        RequestInterface          $request,
+        StoresConfig              $storesConfig,
+        ReinitableConfigInterface $reinitableConfig,
+        Data                      $priceHelper,
+        EventManagerInterface     $eventManager
+    )
+    {
         $this->scopeConfig = $scopeConfig;
         $this->db = $resource->getConnection();
         $this->orderRepository = $orderRepository;
@@ -185,8 +175,7 @@ class BTCPayService
 
     public function getBtcPayServerBaseUrl(): ?string
     {
-
-        $r = $this->getStoreConfig('payment/btcpay/btcpay_base_url', 0);
+        $r = $this->getStoreConfig(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'btcpay_base_url', 0);
         return $r;
     }
 
@@ -334,8 +323,8 @@ class BTCPayService
      * @throws NoSuchEntityException
      * @throws \JsonException
      */
-    public function updateInvoice(string $btcPayStoreId, string $invoiceId, $logPayment = false): ?Order
-    {        
+    public function updateInvoice(string $btcPayStoreId, string $invoiceId, bool $logPayment = false): ?Order
+    {
         $tableName = $this->db->getTableName('btcpay_invoices');
         $select = $this->db->select()->from($tableName)->where('invoice_id = ?', $invoiceId)->where('btcpay_store_id = ?', $btcPayStoreId)->limit(1);
 
@@ -347,7 +336,7 @@ class BTCPayService
 
             $magentoStoreId = (int)$order->getStoreId();
 
-            $invoice = $this->getInvoice($invoiceId, $btcPayStoreId, $magentoStoreId);
+            $invoice = $this->getInvoice($invoiceId, $btcPayStoreId);
 
             if ($order->getIncrementId() !== $invoice->getData()['metadata']['orderId']) {
                 throw new RuntimeException('The supplied order "' . $orderId . '"" does not match BTCPay Invoice "' . $invoiceId . '"". Cannot process BTCPay Server Webhook.');
@@ -361,7 +350,7 @@ class BTCPayService
 
             $this->eventManager->dispatch('btcpay_update_invoice_before', $eventParams);
 
-            if ($logPayment) {                
+            if ($logPayment) {
                 $paymentInfo = $this->getPaymentInfo($magentoStoreId, $btcPayStoreId, $invoiceId, $invoice);
 
                 $comment = 'Incoming payment: <br> Total invoice amount in ' . $paymentInfo['invoice_amount']
@@ -395,8 +384,8 @@ class BTCPayService
                             $order->addCommentToStatusHistory('Payment underway: paid correctly. Not confirmed yet.', $paidCorrectlyStatus, true);
                         }
                         break;
-                    case BTCPayServerInvoice::STATUS_SETTLED:                        
-                        // 2) Payments are settled (marked or not)                        
+                    case BTCPayServerInvoice::STATUS_SETTLED:
+                        // 2) Payments are settled (marked or not)
                         $comment = 'Payment confirmed.';
 
                         $marked = $invoice->isMarked();
@@ -408,7 +397,7 @@ class BTCPayService
                         if ($invoice->isOverpaid()) {
                             $order->addCommentToStatusHistory('Payment confirmed: overpaid.');
                         } elseif ($order->canInvoice()) {
-                            // You can't be sure of the amount, when marked manually the additionalStatus is set to 'Marked' and has priority over 'Overpaid'                            
+                            // You can't be sure of the amount, when marked manually the additionalStatus is set to 'Marked' and has priority over 'Overpaid'
                             $invoice = $order->prepareInvoice();
                             $invoice->setRequestedCaptureCase(Order\Invoice::CAPTURE_OFFLINE);
                             $invoice->register();
@@ -520,17 +509,17 @@ class BTCPayService
 
     private function getHost(int $storeId): ?string
     {
-        $r = $this->getStoreConfig('payment/btcpay/host', $storeId);
+        $r = $this->getStoreConfig(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'host', $storeId);
         return $r;
     }
 
     private function getScheme(int $storeId): ?string
     {
-        $r = $this->getStoreConfig('payment/btcpay/http_scheme', $storeId);
+        $r = $this->getStoreConfig(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'http_scheme', $storeId);
         return $r;
     }
 
-    public function getInvoiceDetailUrl(int $magentoStoreId, string $invoiceId): string
+    public function getInvoiceDetailUrl(string $invoiceId): string
     {
         $baseUrl = $this->getBtcPayServerBaseUrl();
         $r = $baseUrl . 'invoices/' . $invoiceId;
@@ -539,7 +528,7 @@ class BTCPayService
 
     private function getPort(int $storeId): int
     {
-        $r = $this->getStoreConfig('payment/btcpay/http_port', $storeId);
+        $r = $this->getStoreConfig(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'http_port', $storeId);
         if (!$r) {
             $scheme = $this->getScheme($storeId);
             if ($scheme === 'https') {
@@ -563,12 +552,13 @@ class BTCPayService
         return $r;
     }
 
-    public function getApiKeyPermissions($scope, $scopeId): ?array
+    public function getApiKeyPermissions(string $scope, int $scopeId): ?array
     {
         try {
             $apiKey = $this->getApiKey($scope, $scopeId);
-            if ($apiKey) {
-                $client = new \BTCPayServer\Client\ApiKey($this->getBtcPayServerBaseUrl(), $apiKey);
+            $baseUrl = $this->getBtcPayServerBaseUrl();
+            if ($apiKey && $baseUrl) {
+                $client = new \BTCPayServer\Client\ApiKey($baseUrl, $apiKey);
                 $data = $client->getCurrent();
                 $data = $data->getData();
                 $currentPermissions = $data['permissions'];
@@ -576,45 +566,18 @@ class BTCPayService
                 return $currentPermissions;
             }
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return null;
         }
     }
 
-    private function doRequest(int $magentoStoreId, string $url, string $method, array $postData = null): ResponseInterface
+    public function getApiKey(string $scope, int $scopeId): ?string
     {
-        $apiKey = $this->getApiKey('default', 0);
-        $client = $this->getClient($magentoStoreId);
-        $options = [
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'Authorization' => 'token ' . $apiKey
-            ],
-        ];
-
-        if ($postData) {
-            $options['json'] = $postData;
-        }
-
-        try {
-            $r = $client->request($method, $url, $options);
-        } catch (ClientException $e) {
-            $r = $e->getResponse();
-            if ($r->getStatusCode() === 403) {
-                throw new ForbiddenException($e);
-            }
-        }
-        return $r;
-    }
-
-    public function getApiKey($scope, $scopeId): ?string
-    {
-        $config = $this->getConfigWithoutCache('payment/btcpay/api_key', $scope, $scopeId);
+        $config = $this->getConfigWithoutCache(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'api_key', $scope, $scopeId);
         return $config;
     }
 
-    private function getConfigWithoutCache($path, $scope, $scopeId): ?string
+    private function getConfigWithoutCache(string $path, string $scope, int $scopeId): ?string
     {
         $dataCollection = $this->configValueFactory->create()->getCollection();
         $dataCollection->addFieldToFilter('path', ['like' => $path . '%']);
@@ -626,10 +589,10 @@ class BTCPayService
             $config[$row->getPath()] = $row->getValue();
         }
 
-        return $config[$path] ?? null;        
+        return $config[$path] ?? null;
     }
 
-    public function getInvoice(string $invoiceId, string $btcpayStoreId, int $magentoStoreId): \BTCPayServer\Result\Invoice
+    public function getInvoice(string $invoiceId, string $btcpayStoreId): \BTCPayServer\Result\Invoice
     {
         $client = new \BTCPayServer\Client\Invoice($this->getBtcPayServerBaseUrl(), $this->getApiKey('default', 0));
 
@@ -638,25 +601,22 @@ class BTCPayService
         return $invoice;
     }
 
-    public function getAllBtcPayStores($baseUrl, $apiKey): ?array
+    public function getAllBtcPayStores(string $baseUrl, string $apiKey): ?array
     {
         $client = new \BTCPayServer\Client\Store($baseUrl, $apiKey);
-
         $stores = $client->getStores();
-
         return $stores;
     }
 
     public function getBtcPayStore(int $magentoStoreId): ?string
     {
-        $btcPayStoreId = $this->getStoreConfig('payment/btcpay/btcpay_store_id', $magentoStoreId);
-
+        $btcPayStoreId = $this->getStoreConfig(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'btcpay_store_id', $magentoStoreId);
         return $btcPayStoreId;
     }
 
-    public function removeDeletedBtcPayStores()
+    public function removeDeletedBtcPayStores(): void
     {
-        $storedBtcPayStores = array_filter($this->storesConfig->getStoresConfigByPath('payment/btcpay/btcpay_store_id'));
+        $storedBtcPayStores = array_filter($this->storesConfig->getStoresConfigByPath(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'btcpay_store_id'));
 
         $baseUrl = $this->getBtcPayServerBaseUrl();
         $apiKey = $this->getApiKey('default', 0);
@@ -670,14 +630,13 @@ class BTCPayService
                 $whereConditions = [
                     $this->db->quoteInto('value = ?', $storedBtcPayStore),
                 ];
-                $deleteRows = $this->db->delete($tableName, $whereConditions);
+                $numDeletedRows = $this->db->delete($tableName, $whereConditions);
                 $this->reinitableConfig->reinit();
             }
         }
-        return true;
     }
 
-    public function getWebhooksForStore(int $magentoStoreId, $btcPayStoreId, string $apiKey): ?array
+    public function getWebhooksForStore(int $magentoStoreId, string $btcPayStoreId, string $apiKey): ?array
     {
         $client = new \BTCPayServer\Client\Webhook($this->getBtcPayServerBaseUrl(), $apiKey);
 
@@ -694,14 +653,14 @@ class BTCPayService
         return null;
     }
 
-    public function createWebhook(int $magentoStoreId, $apiKey): ?array
+    public function createWebhook(int $magentoStoreId, string $apiKey): ?array
     {
         $client = new \BTCPayServer\Client\Webhook($this->getBtcPayServerBaseUrl(), $apiKey);
         $btcPayStoreId = $this->getBtcPayStore($magentoStoreId);
         if ($btcPayStoreId) {
             $url = $this->getWebhookUrl($magentoStoreId);
             try {
-                $data = $client->createWebhook($btcPayStoreId, $url, null, $this->getWebhookSecret($magentoStoreId));
+                $data = $client->createWebhook($btcPayStoreId, $url, null, $this->getWebhookSecret());
                 return $data->getData();
             } catch (\Exception $e) {
                 return null;
@@ -734,14 +693,14 @@ class BTCPayService
         return (int)$storeId;
     }
 
-    public function getWebhookSecret(int $magentoStoreId): ?string
+    public function getWebhookSecret(): ?string
     {
-        $secret = $this->getConfigWithoutCache('payment/btcpay/webhook_secret', 'default', 0);
+        $secret = $this->getConfigWithoutCache(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'webhook_secret', 'default', 0);
         if (!$secret) {
             $secret = $this->createWebhookSecret();
 
             //Save globally
-            $this->configWriter->save('payment/btcpay/webhook_secret', $secret);
+            $this->configWriter->save(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'webhook_secret', $secret);
         }
         return $secret;
     }
@@ -752,26 +711,20 @@ class BTCPayService
         return hash("sha256", $str);
     }
 
-    public function hashSecret(int $magentoStoreId)
+    public function hashSecret(int $magentoStoreId): string
     {
-        $secret = $this->getWebhookSecret($magentoStoreId);
+        $secret = $this->getWebhookSecret();
         $salt = (string)$magentoStoreId;
         return sha1($secret . $salt);
     }
 
-    public function deleteWebhook(int $magentoStoreId, string $btcStoreId, string $webhookId, string $apiKey)
+    public function deleteWebhook(string $btcStoreId, string $webhookId, string $apiKey): void
     {
         $client = new \BTCPayServer\Client\Webhook($this->getBtcPayServerBaseUrl(), $apiKey);
-
-        try {
-            $deleted = $client->deleteWebhook($btcStoreId, $webhookId);
-            return true;
-        } catch (\Exception $e) {
-            return false;
-        }
+        $client->deleteWebhook($btcStoreId, $webhookId);
     }
 
-    public function getAllBtcPayStoresAssociative($baseUrl, $apiKey): array
+    public function getAllBtcPayStoresAssociative(string $baseUrl, string $apiKey): array
     {
         $storesArray = [];
         $stores = $this->getAllBtcPayStores($baseUrl, $apiKey);
@@ -792,7 +745,7 @@ class BTCPayService
         return $invoices;
     }
 
-    public function saveInvoiceInDb($invoice): bool
+    public function saveInvoiceInDb(array $invoice): bool
     {
         $tableName = $this->db->getTableName('btcpay_invoices');
 
@@ -810,13 +763,14 @@ class BTCPayService
         return false;
     }
 
-    public function getPaymentInfo($magentoStoreId, $btcPayStoreId, $btcPayInvoiceId, $invoice)
+    public function getPaymentInfo(int $magentoStoreId, string $btcPayStoreId, string $btcPayInvoiceId, \BTCPayServer\Result\Invoice $invoice): array
     {
         $r = [];
 
         $btcPayInvoiceClient = new \BTCPayServer\Client\Invoice($this->getBtcPayServerBaseUrl(), $this->getApiKey('default', 0));
         $paymentMethods = $btcPayInvoiceClient->getPaymentMethods($btcPayStoreId, $btcPayInvoiceId);
 
+        // TODO move this somewhere else?
         bcscale(16);
 
         $btcAddress = null;
@@ -831,7 +785,7 @@ class BTCPayService
             $totalPaid = $paymentMethod->getTotalPaid();
 
             //TODO: get due (amount left to be paid to shopkeeper, not actual amount that customer has to pay with fees included)
-
+            // TODO should we use the "DueUncapped" now for this? The field was recently added.
             //$due = $paymentMethod->getDue();
             //$amountOfTransactions = count($paymentMethod->getPayments());
 
@@ -848,6 +802,7 @@ class BTCPayService
             $btcRates[$invoice->getData()['currency']] = $pmData['rate'];
         }
 
+        // TODO do we really need bcmath for this?
         if (bccomp($totalPaid, '0') === 1) {
             $r['amount_received'] = $totalPaid;
             //$r['amount_due'] = $due;
@@ -861,6 +816,7 @@ class BTCPayService
             $invoiceAmountConverted = $this->getFormattedPrice((int)$magentoStoreId, (float)$invoiceAmount);
             $r['invoice_amount'] = $invoiceAmountConverted;
 
+            // TODO do we really need bcmath for this?
             $amountPaid = bcmul($btcRates[$storeCurrency], $totalPaid);
             $amountPaidConverted = $this->getFormattedPrice((int)$magentoStoreId, (float)$amountPaid);
             $r['amount_paid_store_currency'] = $amountPaidConverted;
@@ -870,12 +826,13 @@ class BTCPayService
             $r['percent_paid'] = $percentPaid;
 
             $r['paid_at'] = date('Y-m-d H:i:s', $invoice->getData()['createdTime']);
+            // TODO use a class instead of an array
         }
 
         return $r;
     }
 
-    public function getFormattedPrice(int $storeId, float $price)
+    public function getFormattedPrice(int $storeId, float $price): string
     {
         return $this->priceHelper->currencyByStore($price, $storeId, true, false);
     }
@@ -889,7 +846,7 @@ class BTCPayService
 
     public function autoCancelOnExpiry(): bool
     {
-        return (bool)$this->scopeConfig->getValue('payment/btcpay/auto_cancel');
+        return (bool)$this->scopeConfig->getValue(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'auto_cancel');
     }
 
     public function markBtcPayInvoice(string $orderId, string $markInvoiceAs): array
@@ -910,5 +867,17 @@ class BTCPayService
 
         $invoice = $client->markInvoiceStatus($btcPayStoreId, $btcPayinvoiceId, $markInvoiceAs);
         return $invoice->getData();
+    }
+
+    public function getVersion(): ?string
+    {
+        $baseUrl = $this->getBtcPayServerBaseUrl();
+        $apiKey = $this->getApiKey('default', 0);
+        if ($baseUrl && $apiKey) {
+            $serverApi = new Server($baseUrl, $apiKey);
+            $info = $serverApi->getInfo();
+            return $info->getVersion();
+        }
+        return null;
     }
 }

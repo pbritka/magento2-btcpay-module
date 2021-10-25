@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Block\Adminhtml\Form\Field;
@@ -36,15 +41,15 @@ class ServerInfo extends \Magento\Config\Block\System\Config\Form\Field
     {
 
         $html = $this->getConnectionStatusPerStore();
+        $r = '<tr><td class="label"></td><td class="value">' . $html . '</span></p></td><td class=""></td></tr>';
 
-        $r = '<tr><td class="label"><label><span>' . $this->escapeHtml(__('BTCPay Server Status')) . '</span></label></td><td class="value">' . $html . '</span></p></td><td class=""></td></tr>';
         return $r;
     }
 
 
-    public function getErrorHtml(int $magentoStoreId): string
+    public function getStoreErrorHtml(int $magentoStoreId): string
     {
-        $lines = $this->helper->getInstallationErrors($magentoStoreId, false);
+        $lines = $this->helper->getStoreInstallationErrors($magentoStoreId, false);
 
         if (count($lines) > 0) {
             $r = '<ul style="padding-left: 25px">';
@@ -60,11 +65,20 @@ class ServerInfo extends \Magento\Config\Block\System\Config\Form\Field
 
     public function getConnectionStatusPerStore()
     {
+        $html = '';
+        $globalErrors = $this->helper->getGlobalInstallationErrors(true);
+        if (count($globalErrors) > 0) {
+            $html .= '<ul style="padding-left: 25px">';
+            foreach ($globalErrors as $line) {
+                $html .= '<li style="margin-bottom: 10px; color: red">' . $line . '</li>';
+            }
+            $html .= '</ul>';
+        }
 
-        $html = '<table>
+        $html .= '<table class="status">
   <tr>
-    <th style="text-align: left; width: 60px">' . __('Store') . '</th>
-    <th style="text-align: left">' . __('Feedback') . '</th>
+    <th style="text-align: left;">' . __('Store View') . '</th>
+    <th style="text-align: left">' . __('Status') . '</th>
   </tr>';
 
         $magentoStores = $this->helper->getAllMagentoStoreViews();
@@ -73,8 +87,8 @@ class ServerInfo extends \Magento\Config\Block\System\Config\Form\Field
             $storeId = (int)$magentoStore->getId();
 
             $html = $html . '  <tr>
-    <td>' . $magentoStore->getName() . '</td>
-    <td>' . $this->getErrorHtml($storeId) . '</td>
+    <td style="white-space: nowrap">' . $magentoStore->getName() . '</td>
+    <td>' . $this->getStoreErrorHtml($storeId) . '</td>
   </tr>';
 
         }

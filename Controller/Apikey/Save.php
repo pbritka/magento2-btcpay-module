@@ -1,4 +1,9 @@
 <?php
+/*
+ * @author Wouter Samaey <wouter.samaey@storefront.agency>
+ * @license MIT
+ */
+
 declare(strict_types=1);
 
 namespace Storefront\BTCPay\Controller\Apikey;
@@ -76,7 +81,7 @@ class Save extends Action implements CsrfAwareActionInterface
                 $client->getCurrent();
 
                 // Save API key to config settings
-                $this->configResource->saveConfig('payment/btcpay/api_key', $apiKey);
+                $this->configResource->saveConfig(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'api_key', $apiKey);
 
                 // When only 1 BTCStore, save immediately
                 $allBtcStores = $this->btcService->getAllBtcPayStores($baseUrl, $apiKey);
@@ -88,10 +93,9 @@ class Save extends Action implements CsrfAwareActionInterface
                         $allMagentoStoreViews = $this->helper->getAllMagentoStoreViewIds();
 
                         foreach ($allMagentoStoreViews as $magentoStoreView) {
-                            $this->configResource->saveConfig('payment/btcpay/btcpay_store_id', $btcStoreId, 'stores', $magentoStoreView);
+                            $this->configResource->saveConfig(\Storefront\BTCPay\Helper\Data::CONFIG_ROOT.'btcpay_store_id', $btcStoreId, 'stores', $magentoStoreView);
                             $this->helper->installWebhookIfNeeded((int)$magentoStoreView, true);
                         }
-
                     }
                 }
 
@@ -99,7 +103,7 @@ class Save extends Action implements CsrfAwareActionInterface
                 $this->reinitableConfig->reinit();
 
                 echo __('Success! You can now close this window.');
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $this->logger->error($e);
                 echo __('Something went wrong. Please try again.');
             }
