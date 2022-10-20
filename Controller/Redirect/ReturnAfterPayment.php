@@ -110,15 +110,18 @@ class ReturnAfterPayment extends Action
         }
 
         if ($order && $valid) {
-            if ($isInvoiceProcessing) {
+            if ($isInvoiceProcessing || $invoice->isFullyPaid()) {
                 $this->checkoutSession->setLastQuoteId($order->getQuoteId());
                 $this->checkoutSession->setLastSuccessQuoteId($order->getQuoteId());
                 $this->checkoutSession->setLastOrderId($order->getId());
                 $this->checkoutSession->setLastRealOrderId($order->getIncrementId());
                 $resultRedirect->setUrl($order->getStore()->getUrl('checkout/onepage/success'));
             }
-            if ($isInvoiceExpired) {
+            elseif ($isInvoiceExpired) {
                 $resultRedirect->setUrl($this->url->getUrl('btcpay/cart/restore', ['order_id' => $orderId]));
+            }
+            else{
+                throw new \RuntimeException('Unsupported case. Order is valid, but BTCPay Server Invoice is not paid or expired.');
             }
         } else {
             $resultRedirect->setUrl($this->url->getUrl('checkout/cart/'));
