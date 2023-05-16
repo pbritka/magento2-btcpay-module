@@ -37,6 +37,7 @@ use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\DB\Transaction;
+use Magento\Framework\Event\ManagerInterface as EventManagerInterface;
 use Magento\Framework\Exception\InputException;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Framework\Exception\NoSuchEntityException;
@@ -127,8 +128,29 @@ class BTCPayService
      */
     private $priceHelper;
 
+    /**
+     * @var EventManagerInterface
+     */
+    private $eventManager;
 
-    public function __construct(ResourceConnection $resource, ScopeConfigInterface $scopeConfig, OrderRepository $orderRepository, Transaction $transaction, LoggerInterface $logger, Url $urlBuider, StoreManagerInterface $storeManager, WriterInterface $configWriter, ValueFactory $configValueFactory, CollectionFactory $configCollectionFactory, RequestInterface $request, StoresConfig $storesConfig, ReinitableConfigInterface $reinitableConfig, Data $priceHelper)
+
+    public function __construct(
+        ResourceConnection        $resource,
+        ScopeConfigInterface      $scopeConfig,
+        OrderRepository           $orderRepository,
+        Transaction               $transaction,
+        LoggerInterface           $logger,
+        Url                       $urlBuider,
+        StoreManagerInterface     $storeManager,
+        WriterInterface           $configWriter,
+        ValueFactory              $configValueFactory,
+        CollectionFactory         $configCollectionFactory,
+        RequestInterface          $request,
+        StoresConfig              $storesConfig,
+        ReinitableConfigInterface $reinitableConfig,
+        Data                      $priceHelper,
+        EventManagerInterface     $eventManager
+    )
     {
         $this->scopeConfig = $scopeConfig;
         $this->db = $resource->getConnection();
@@ -144,6 +166,7 @@ class BTCPayService
         $this->storesConfig = $storesConfig;
         $this->reinitableConfig = $reinitableConfig;
         $this->priceHelper = $priceHelper;
+        $this->eventManager = $eventManager;
     }
 
     /**
@@ -337,6 +360,12 @@ class BTCPayService
             }
 
             $invoiceStatus = $invoice->getStatus();
+            $eventParams = [
+                'order' => $order,
+                'btcpay_invoice' => $invoice
+            ];
+
+            $this->eventManager->dispatch('btcpay_update_invoice_before', $eventParams);
 
             if ($logPayment) {
                 $paymentInfo = $this->getPaymentInfo($magentoStoreId, $btcPayStoreId, $invoiceId, $invoice);
@@ -374,20 +403,18 @@ class BTCPayService
                         break;
                     case BTCPayServerInvoice::STATUS_SETTLED:
                         // 2) Payments are settled (marked or not)
-                        $settledStatus = \Magento\Sales\Model\Order::STATE_COMPLETE;
+                        $comment = 'Payment confirmed.';
+
+                        $marked = $invoice->isMarked();
+                        if ($marked) {
+                            $comment .= ' Marked manually.';
+                        }
+                        $order->addCommentToStatusHistory($comment, false, true);
 
                         if ($invoice->isOverpaid()) {
                             $order->addCommentToStatusHistory('Payment confirmed: overpaid.');
                         } elseif ($order->canInvoice()) {
-
                             // You can't be sure of the amount, when marked manually the additionalStatus is set to 'Marked' and has priority over 'Overpaid'
-                            $comment = 'Payment confirmed.';
-
-                            $marked = $invoice->isMarked();
-                            if ($marked) {
-                                $comment .= ' Marked manually.';
-                            }
-                            $order->addCommentToStatusHistory($comment, $settledStatus, true);
                             $invoice = $order->prepareInvoice();
                             $invoice->setRequestedCaptureCase(Order\Invoice::CAPTURE_OFFLINE);
                             $invoice->register();
@@ -446,6 +473,8 @@ class BTCPayService
                         $this->logger->error('Unknown invoice state "' . $invoiceStatus . '" for invoice "' . $invoiceId . '"');
                         break;
                 }
+
+                $this->eventManager->dispatch('btcpay_update_invoice_after', $eventParams);
                 $order->save();
 
 //
