@@ -187,6 +187,11 @@ class BTCPayService
     public function getBtcPayServerBaseUrl(): ?string
     {
         $r = $this->getStoreConfig('payment/btcpay/btcpay_base_url', 0);
+
+        if (!$r) {
+            return null;
+        }
+
         $r = rtrim((string)$r, '/') . '/';
         return $r;
     }
@@ -404,6 +409,7 @@ class BTCPayService
                     case BTCPayServerInvoice::STATUS_SETTLED:
                         // 2) Payments are settled (marked or not)
                         $comment = 'Payment confirmed.';
+                        $settledStatus = \Magento\Sales\Model\Order::STATE_COMPLETE;
 
                         $marked = $invoice->isMarked();
                         if ($marked) {
@@ -412,7 +418,7 @@ class BTCPayService
                         $order->addCommentToStatusHistory($comment, false, true);
 
                         if ($invoice->isOverpaid()) {
-                            $order->addCommentToStatusHistory('Payment confirmed: overpaid.');
+                            $order->addCommentToStatusHistory('Payment confirmed: overpaid.', $settledStatus, true);                            
                         } elseif ($order->canInvoice()) {
                             // You can't be sure of the amount, when marked manually the additionalStatus is set to 'Marked' and has priority over 'Overpaid'
                             $invoice = $order->prepareInvoice();
@@ -726,7 +732,8 @@ class BTCPayService
     public function getReceiveApikeyUrl(int $magentoStoreId): string
     {
         $url = $this->getStoreConfig('web/secure/base_url', $magentoStoreId);
-        $url .= 'btcpay/apikey/save';
+        $url = rtrim($url, '/');
+        $url .= '/btcpay/apikey/save';
         $hashedSecret = $this->hashSecret($magentoStoreId);
         return $url . '?secret=' . urlencode($hashedSecret) . '&store=' . $magentoStoreId;
     }

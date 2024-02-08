@@ -103,6 +103,7 @@ class ReturnAfterPayment extends Action
                 $invoice = $this->btcPayService->getInvoice($btcPayInvoiceId, $btcPayStoreId, $magentoStoreId);
                 $isInvoiceExpired = $invoice->isExpired();
                 $isInvoiceProcessing = $invoice->isProcessing();
+                $isInvoiceSettled = $invoice->isSettled();
             }
         } else {
             // Order cannot be found
@@ -110,12 +111,12 @@ class ReturnAfterPayment extends Action
         }
 
         if ($order && $valid) {
-            if ($isInvoiceProcessing || $invoice->isSettled()) {
+            if ($isInvoiceProcessing || $isInvoiceSettled) {
                 $this->checkoutSession->setLastQuoteId($order->getQuoteId());
                 $this->checkoutSession->setLastSuccessQuoteId($order->getQuoteId());
                 $this->checkoutSession->setLastOrderId($order->getId());
                 $this->checkoutSession->setLastRealOrderId($order->getIncrementId());
-                $resultRedirect->setUrl($order->getStore()->getUrl('checkout/onepage/success'));                
+                $resultRedirect->setUrl($order->getStore()->getUrl('checkout/onepage/success'));
             }
             elseif ($isInvoiceExpired) {
                 $resultRedirect->setUrl($this->url->getUrl('btcpay/cart/restore', ['order_id' => $orderId]));
